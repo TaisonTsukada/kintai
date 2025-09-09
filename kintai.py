@@ -496,6 +496,84 @@ class KintaiManager:
             timestamp=now,
             duration_seconds=duration_seconds
         )
+    
+    def create_new_record(self, date_str: str, check_in_time: str, check_out_time: str) -> ClockResult:
+        """任意の日付の新規勤怠記録を作成"""
+        try:
+            # 日付形式の検証
+            datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            return ClockResult(
+                success=False,
+                message="日付の形式が正しくありません。YYYY-MM-DD形式で入力してください。"
+            )
+        
+        # 既存記録の存在確認
+        if date_str in self.records:
+            return ClockResult(
+                success=False,
+                message="既に記録が存在します。編集するには edit コマンドを使用してください。"
+            )
+        
+        # 時刻形式の検証とパース
+        try:
+            # HH:MM形式をパース
+            in_parts = check_in_time.split(':')
+            out_parts = check_out_time.split(':')
+            
+            if len(in_parts) != 2 or len(out_parts) != 2:
+                raise ValueError("Invalid time format")
+            
+            in_hour, in_minute = map(int, in_parts)
+            out_hour, out_minute = map(int, out_parts)
+            
+            if not (0 <= in_hour <= 23 and 0 <= in_minute <= 59):
+                raise ValueError("Invalid check-in time values")
+            if not (0 <= out_hour <= 23 and 0 <= out_minute <= 59):
+                raise ValueError("Invalid check-out time values")
+            
+            # 指定日付で datetime オブジェクトを作成
+            target_date = datetime.fromisoformat(date_str).date()
+            
+            check_in_dt = datetime.combine(target_date, datetime.min.time().replace(hour=in_hour, minute=in_minute))
+            check_out_dt = datetime.combine(target_date, datetime.min.time().replace(hour=out_hour, minute=out_minute))
+            
+            # JST タイムゾーンを適用
+            check_in_dt = self.JST.localize(check_in_dt)
+            check_out_dt = self.JST.localize(check_out_dt)
+            
+            # 時刻の順序チェック（同日の場合）
+            if check_out_dt <= check_in_dt:
+                return ClockResult(
+                    success=False,
+                    message="退勤時刻が出勤時刻より早くなっています。日をまたぐ場合は別途対応が必要です。"
+                )
+            
+        except (ValueError, TypeError):
+            return ClockResult(
+                success=False,
+                message="時刻の形式が正しくありません。HH:MM形式で入力してください。"
+            )
+        
+        # 新規記録を作成
+        self.records[date_str] = {
+            'check_in': check_in_dt,
+            'check_out': check_out_dt
+        }
+        
+        # ファイルに保存
+        self.save_to_file()
+        
+        # 勤務時間を計算
+        duration_seconds = self._calculate_duration_seconds(check_in_dt, check_out_dt)
+        duration_message = self._format_duration_message(duration_seconds)
+        
+        return ClockResult(
+            success=True,
+            message=f"{date_str}の記録を作成しました。\n出勤: {check_in_dt.strftime('%H:%M:%S')}\n退勤: {check_out_dt.strftime('%H:%M:%S')}\n勤務時間: {duration_message}",
+            timestamp=check_in_dt,
+            duration_seconds=duration_seconds
+        )
 
 
 @click.group()
@@ -727,6 +805,30 @@ def delete(date):
             click.get_current_context().exit(1)
     else:
         click.echo("削除をキャンセルしました。")
+
+
+@cli.command()
+@click.option('--date', required=True, help='記録する日付 (YYYY-MM-DD)')
+@click.option('--in', 'check_in', required=True, help='出勤時刻 (HH:MM)')
+@click.option('--out', 'check_out', required=True, help='退勤時刻 (HH:MM)')
+def new(date, check_in, check_out):
+    """過去の勤怠記録を新規作成"""
+    manager = KintaiManager()
+    
+    # パラメータの必須チェック
+    if not check_in or not check_out:
+        click.echo("--in と --out は必須です。", err=True)
+        click.get_current_context().exit(1)
+    
+    result = manager.create_new_record(date, check_in, check_out)
+    
+    if result.success:
+        lines = result.message.split('\n')
+        for line in lines:
+            click.echo(line)
+    else:
+        click.echo(result.message, err=True)
+        click.get_current_context().exit(1)
 
 
 @cli.group()

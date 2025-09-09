@@ -668,6 +668,167 @@ class TestBreakTimeCLI:
             assert "休憩時間:" in result.output
 
 
+class TestNewCommand:
+    def test_new_command_creates_past_record(self):
+        """過去の日付の勤怠記録を作成するテスト（Red段階）"""
+        runner = CliRunner()
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {'KINTAI_DATA_DIR': temp_dir}
+            
+            from kintai import cli
+            
+            # 過去の日付で新しい記録を作成
+            result = runner.invoke(cli, [
+                'new', 
+                '--date', '2025-01-15', 
+                '--in', '09:00', 
+                '--out', '18:00'
+            ], env=env)
+            
+            assert result.exit_code == 0
+            assert "2025-01-15の記録を作成しました" in result.output
+    
+    def test_new_command_with_invalid_date_format(self):
+        """無効な日付形式でのエラーテスト（Red段階）"""
+        runner = CliRunner()
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {'KINTAI_DATA_DIR': temp_dir}
+            
+            from kintai import cli
+            
+            # 無効な日付形式
+            result = runner.invoke(cli, [
+                'new', 
+                '--date', 'invalid-date', 
+                '--in', '09:00', 
+                '--out', '18:00'
+            ], env=env)
+            
+            assert result.exit_code != 0
+            assert "日付の形式が正しくありません" in result.output
+    
+    def test_new_command_with_invalid_time_format(self):
+        """無効な時刻形式でのエラーテスト（Red段階）"""
+        runner = CliRunner()
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {'KINTAI_DATA_DIR': temp_dir}
+            
+            from kintai import cli
+            
+            # 無効な時刻形式
+            result = runner.invoke(cli, [
+                'new', 
+                '--date', '2025-01-15', 
+                '--in', 'invalid-time', 
+                '--out', '18:00'
+            ], env=env)
+            
+            assert result.exit_code != 0
+            assert "時刻の形式が正しくありません" in result.output
+    
+    def test_new_command_with_existing_record_conflict(self):
+        """既存記録との競合テスト（Red段階）"""
+        runner = CliRunner()
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {'KINTAI_DATA_DIR': temp_dir}
+            
+            from kintai import cli
+            
+            # 最初の記録を作成
+            runner.invoke(cli, [
+                'new', 
+                '--date', '2025-01-15', 
+                '--in', '09:00', 
+                '--out', '18:00'
+            ], env=env)
+            
+            # 同じ日付で再度作成を試行
+            result = runner.invoke(cli, [
+                'new', 
+                '--date', '2025-01-15', 
+                '--in', '10:00', 
+                '--out', '19:00'
+            ], env=env)
+            
+            assert result.exit_code != 0
+            assert "既に記録が存在します" in result.output
+    
+    def test_new_command_with_invalid_time_order(self):
+        """退勤時刻が出勤時刻より早い場合のエラーテスト（Red段階）"""
+        runner = CliRunner()
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {'KINTAI_DATA_DIR': temp_dir}
+            
+            from kintai import cli
+            
+            # 退勤時刻が出勤時刻より早い
+            result = runner.invoke(cli, [
+                'new', 
+                '--date', '2025-01-15', 
+                '--in', '18:00', 
+                '--out', '09:00'
+            ], env=env)
+            
+            assert result.exit_code != 0
+            assert "退勤時刻が出勤時刻より早くなっています" in result.output
+    
+    def test_new_command_missing_required_parameters(self):
+        """必須パラメータ不足のエラーテスト（Red段階）"""
+        runner = CliRunner()
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {'KINTAI_DATA_DIR': temp_dir}
+            
+            from kintai import cli
+            
+            # --date のみ指定（Click が自動でエラーを返す）
+            result = runner.invoke(cli, ['new', '--date', '2025-01-15'], env=env)
+            
+            assert result.exit_code != 0
+            assert "Missing option" in result.output
+
+
+class TestNewCommandKintaiManager:
+    def test_create_new_record_method(self):
+        """KintaiManagerの新規記録作成メソッドテスト（Red段階）"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = KintaiManager.__new__(KintaiManager)
+            manager.records = {}
+            manager.data_file_path = Path(temp_dir) / "test.json"
+            manager.JST = pytz.timezone('Asia/Tokyo')
+            
+            # 新規記録作成
+            result = manager.create_new_record('2025-01-15', '09:00', '18:00')
+            
+            assert result.success is True
+            assert "2025-01-15の記録を作成しました" in result.message
+            assert '2025-01-15' in manager.records
+            assert 'check_in' in manager.records['2025-01-15']
+            assert 'check_out' in manager.records['2025-01-15']
+    
+    def test_create_new_record_with_existing_record(self):
+        """既存記録がある場合のエラーテスト（Red段階）"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = KintaiManager.__new__(KintaiManager)
+            manager.records = {}
+            manager.data_file_path = Path(temp_dir) / "test.json"
+            manager.JST = pytz.timezone('Asia/Tokyo')
+            
+            # 最初の記録を作成
+            manager.create_new_record('2025-01-15', '09:00', '18:00')
+            
+            # 同じ日付で再度作成を試行
+            result = manager.create_new_record('2025-01-15', '10:00', '19:00')
+            
+            assert result.success is False
+            assert "既に記録が存在します" in result.message
+
+
 class TestCLIInterface:
     def test_kintai_in_command(self):
         """kintai in コマンドのテスト（Red段階）"""
