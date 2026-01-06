@@ -3,7 +3,7 @@ name = "kintai"
 version = "0.1.0"
 description = "勤怠管理CLIツール"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "click>=8.0.0",
     "pytz>=2021.3",

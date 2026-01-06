@@ -895,7 +895,9 @@ class TestCLIInterface:
             # README.mdの仕様: "出勤時刻を記録しました: 2025-01-10 09:00:15"
             assert result.exit_code == 0
             assert "出勤時刻を記録しました:" in result.output
-            assert "2025-" in result.output  # 年が含まれている
+            # 日付形式 YYYY-MM-DD が含まれていることを確認
+            import re
+            assert re.search(r'\d{4}-\d{2}-\d{2}', result.output)  # 年月日が含まれている
             assert ":" in result.output  # 時刻形式
     
     def test_cli_integration_with_manager(self):

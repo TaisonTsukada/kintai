@@ -8,10 +8,12 @@ Ubuntu環境で動作する個人用勤怠管理CLIツール「kintai」を開�
 
 ### 実行環境
 - OS: Ubuntu (20.04 LTS以降)
-- 言語: Python 3.8以上を推奨
+- 言語: Python 3.10以上
+- パッケージマネージャー: uv
 - タイムゾーン: Asia/Tokyo (JST)
 
 ### 必要なPythonパッケージ
+依存関係は `pyproject.toml` で管理されています。
 ```
 click>=8.0.0       # CLIフレームワーク
 pytz>=2021.3       # タイムゾーン処理
@@ -25,11 +27,14 @@ pyperclip>=1.8.0   # クリップボード操作
 ```
 kintai/
 ├── kintai.py          # メインスクリプト
-├── requirements.txt   # 依存パッケージリスト
-├── data/
-│   └── records.json   # 勤怠データ保存ファイル
+├── pyproject.toml     # プロジェクト設定・依存関係
+├── uv.lock            # 依存関係のロックファイル
+├── tests/
+│   └── test_kintai.py # テストファイル
 └── README.md          # 使用方法ドキュメント
 ```
+
+勤怠データは `~/.kintai/records.json` に保存されます。
 
 ## 機能仕様
 
@@ -226,17 +231,36 @@ $ kintai status
 git clone [repository-url] kintai
 cd kintai
 
-# 2. 依存パッケージのインストール
-pip install -r requirements.txt
+# 2. uvのインストール（未インストールの場合）
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 3. 実行権限の付与
-chmod +x kintai.py
+# 3. 依存パッケージのインストール
+uv sync
 
-# 4. シンボリックリンクの作成（オプション）
-sudo ln -s $(pwd)/kintai.py /usr/local/bin/kintai
+# 4. 動作確認
+uv run kintai --help
+```
 
-# 5. データディレクトリの作成
-mkdir -p ~/.kintai
+### 実行方法
+
+```bash
+# uvを通じて実行
+uv run kintai in
+uv run kintai out
+uv run kintai status
+uv run kintai summary
+
+# テストの実行
+uv run pytest
+```
+
+### エイリアス設定（オプション）
+
+頻繁に使用する場合は、シェルにエイリアスを設定すると便利です。
+
+```bash
+# ~/.bashrc または ~/.zshrc に追加
+alias kintai='uv run --directory /path/to/kintai kintai'
 ```
 
 ## テストケース
