@@ -1,0 +1,170 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #6b7280;
+  --border: #e2e2e2;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --weekend-bg: #fafafa;
+  --open-bg: #fff7e6;
+  --danger: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1a;
+    --fg: #e5e5e5;
+    --muted: #9ca3af;
+    --border: #333333;
+    --accent: #60a5fa;
+    --accent-fg: #1a1a1a;
+    --weekend-bg: #212121;
+    --open-bg: #2a230f;
+    --danger: #f87171;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.page-header h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.month-nav a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.current-month {
+  font-weight: 600;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+tr.weekend {
+  background: var(--weekend-bg);
+}
+
+tr.day-row[data-open="true"] {
+  background: var(--open-bg);
+}
+
+.empty {
+  color: var(--muted);
+}
+
+.session-view, .break-view {
+  white-space: nowrap;
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--border);
+  color: var(--fg);
+}
+
+.badge-open {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.locked-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+button {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button.save-btn {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+
+.actions-cell {
+  white-space: nowrap;
+}
+
+.session-edit-row, .break-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.session-edit-row input[type="time"], .break-edit-row input[type="time"] {
+  font: inherit;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+.next-day-label {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}

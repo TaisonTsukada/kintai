@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>kintai - {{ year_month }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="page-header">
+    <h1>kintai 勤怠テーブル</h1>
+    <nav class="month-nav">
+      <a href="/?month={{ prev_month }}">&laquo; 前月</a>
+      <span class="current-month">{{ year_month }}</span>
+      <a href="/?month={{ next_month }}">次月 &raquo;</a>
+    </nav>
+  </header>
+
+  <table id="kintai-table">
+    <thead>
+      <tr>
+        <th>日付</th>
+        <th>曜日</th>
+        <th>セッション</th>
+        <th>休憩</th>
+        <th>総勤務</th>
+        <th>実労働</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for day in days %}
+      <tr class="day-row {{ 'weekend' if day.weekday in ['土', '日'] else '' }}"
+          data-date="{{ day.date }}" data-open="{{ 'true' if day.is_open else 'false' }}">
+        <td>{{ day.date }}</td>
+        <td>{{ day.weekday }}</td>
+        <td class="sessions-cell">
+          {% if day.sessions %}
+            {% for s in day.sessions %}
+              <div class="session-view">
+                {{ s.check_in.strftime('%H:%M') }}&ndash;{%- if s.check_out %}{{ s.check_out.strftime('%H:%M') }}{% if s.check_out.date() != s.check_in.date() %}<span class="badge">翌日</span>{% endif %}{%- else %}<span class="badge badge-open">進行中</span>{%- endif %}
+              </div>
+            {% endfor %}
+          {% else %}
+            <span class="empty">-</span>
+          {% endif %}
+        </td>
+        <td class="breaks-cell">
+          {% if day.breaks %}
+            {% for b in day.breaks %}
+              <div class="break-view">{{ b.start.strftime('%H:%M') }}&ndash;{{ b.end.strftime('%H:%M') if b.end else '進行中' }}</div>
+            {% endfor %}
+          {% else %}
+            <span class="empty">-</span>
+          {% endif %}
+        </td>
+        <td class="total-cell">{{ day.duration_seconds|duration if day.duration_seconds is not none else '-' }}</td>
+        <td class="actual-cell">{{ day.actual_work_seconds|duration if day.actual_work_seconds is not none else '-' }}</td>
+        <td class="actions-cell">
+          <button class="edit-btn" type="button">編集</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script src="{{ url_for('static', filename='day-editor.js') }}"></script>
+</body>
+</html>

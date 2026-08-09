@@ -32,11 +32,7 @@ def in_command():
             if forced.success:
                 click.echo(f"出勤時刻を記録しました: {forced.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
     else:
-        click.echo(result.message)
-        if click.confirm("上書きしますか？"):
-            forced = manager.clock_in(force=True)
-            if forced.success:
-                click.echo(f"出勤時刻を記録しました: {forced.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+        click.echo(result.message, err=True)
 
 
 @cli.command()
@@ -61,12 +57,20 @@ def status():
 
     click.echo(f"状態: {info['state']}")
 
-    if info['check_in']:
+    sessions = info['sessions']
+    if len(sessions) > 1:
+        click.echo("セッション:")
+        for s in sessions:
+            in_str = s['check_in'].strftime('%H:%M:%S')
+            out_str = s['check_out'].strftime('%H:%M:%S') if 'check_out' in s else '(進行中)'
+            click.echo(f"  {in_str} - {out_str}")
+    elif info['check_in']:
         click.echo(f"出勤時刻: {info['check_in'].strftime('%Y-%m-%d %H:%M:%S')}")
 
     state = info['state']
     if state == '退勤済み':
-        click.echo(f"退勤時刻: {info['check_out'].strftime('%Y-%m-%d %H:%M:%S')}")
+        if len(sessions) <= 1:
+            click.echo(f"退勤時刻: {info['check_out'].strftime('%Y-%m-%d %H:%M:%S')}")
         click.echo(f"総勤務時間: {fmt(info['elapsed_seconds'])}")
         if info['break_seconds'] > 0:
             click.echo(f"休憩時間: {fmt(info['break_seconds'])}")
@@ -95,11 +99,18 @@ def today():
     click.echo(f"=== {now.strftime('%Y-%m-%d')}（{weekday}）===")
     click.echo(f"状態: {info['state']}")
 
-    if info['check_in']:
-        click.echo(f"出勤時刻: {info['check_in'].strftime('%H:%M:%S')}")
-
-    if info['check_out']:
-        click.echo(f"退勤時刻: {info['check_out'].strftime('%H:%M:%S')}")
+    sessions = info['sessions']
+    if len(sessions) > 1:
+        click.echo("セッション:")
+        for s in sessions:
+            in_str = s['check_in'].strftime('%H:%M:%S')
+            out_str = s['check_out'].strftime('%H:%M:%S') if 'check_out' in s else '(進行中)'
+            click.echo(f"  {in_str} - {out_str}")
+    else:
+        if info['check_in']:
+            click.echo(f"出勤時刻: {info['check_in'].strftime('%H:%M:%S')}")
+        if info['check_out']:
+            click.echo(f"退勤時刻: {info['check_out'].strftime('%H:%M:%S')}")
 
     if info['elapsed_seconds'] is not None:
         label = "総勤務時間" if info['state'] == '退勤済み' else "経過時間"
@@ -115,15 +126,48 @@ def today():
         click.echo(f"現在の休憩時間: {fmt(info['current_break_seconds'])}")
 
 
+def _parse_sessions_arg(raw: str) -> list:
+    """'10:00~12:00, 17:00-22:00' のようなカンマ区切り文字列を [(in, out), ...] に変換する。"""
+    pairs = []
+    for chunk in raw.split(','):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        for sep in ('~', '-'):
+            if sep in chunk:
+                start, end = chunk.split(sep, 1)
+                pairs.append((start.strip(), end.strip()))
+                break
+        else:
+            raise ValueError(f"セッション範囲の形式が正しくありません: {chunk}")
+    return pairs
+
+
 @cli.command()
 @click.option('--date', required=True, help='編集する日付 (YYYY-MM-DD)')
-@click.option('--in', 'check_in', help='新しい出勤時刻 (HH:MM)')
-@click.option('--out', 'check_out', help='新しい退勤時刻 (HH:MM)')
-def edit(date, check_in, check_out):
+@click.option('--in', 'check_in', help='新しい出勤時刻 (HH:MM) — セッション1の出勤')
+@click.option('--out', 'check_out', help='新しい退勤時刻 (HH:MM) — セッション1の退勤')
+@click.option(
+    '--session', 'sessions', multiple=True,
+    help='セッション範囲。例: "10:00~12:00,17:00~22:00"。複数指定可。指定時は全セッションを置き換える。',
+)
+def edit(date, check_in, check_out, sessions):
     """勤怠記録の編集"""
     manager = KintaiManager()
 
-    if not check_in and not check_out:
+    if sessions:
+        try:
+            pairs = []
+            for raw in sessions:
+                pairs.extend(_parse_sessions_arg(raw))
+        except ValueError as e:
+            click.echo(str(e), err=True)
+            click.get_current_context().exit(1)
+            return
+        result = manager.set_day_sessions(
+            date, [{'check_in': ci, 'check_out': co} for ci, co in pairs]
+        )
+    elif not check_in and not check_out:
         result = _interactive_edit(manager, date)
     else:
         result = manager.edit_record(date, check_in, check_out)
@@ -145,14 +189,15 @@ def _interactive_edit(manager: KintaiManager, date_str: str) -> ClockResult:
     if date_str not in manager.records:
         return ClockResult(success=False, message="指定された日付の記録が見つかりません。")
 
-    record = manager.records[date_str]
+    sessions = manager.records[date_str].get('sessions', [])
+    session = sessions[0] if sessions else {}
     click.echo("現在の記録:")
-    if 'check_in' in record:
-        click.echo(f"  出勤: {record['check_in'].strftime('%H:%M:%S')}")
+    if 'check_in' in session:
+        click.echo(f"  出勤: {session['check_in'].strftime('%H:%M:%S')}")
     else:
         click.echo("  出勤: 記録なし")
-    if 'check_out' in record:
-        click.echo(f"  退勤: {record['check_out'].strftime('%H:%M:%S')}")
+    if 'check_out' in session:
+        click.echo(f"  退勤: {session['check_out'].strftime('%H:%M:%S')}")
     else:
         click.echo("  退勤: 記録なし")
 
@@ -185,12 +230,39 @@ def delete(date):
 
 @cli.command()
 @click.option('--date', required=True, help='記録する日付 (YYYY-MM-DD)')
-@click.option('--in', 'check_in', required=True, help='出勤時刻 (HH:MM)')
-@click.option('--out', 'check_out', required=True, help='退勤時刻 (HH:MM)')
-def new(date, check_in, check_out):
+@click.option('--in', 'check_in', help='出勤時刻 (HH:MM)')
+@click.option('--out', 'check_out', help='退勤時刻 (HH:MM)')
+@click.option(
+    '--session', 'sessions', multiple=True,
+    help='セッション範囲。例: "10:00~12:00,17:00~22:00,22:30~23:30"。複数指定可。',
+)
+def new(date, check_in, check_out, sessions):
     """過去の勤怠記録を新規作成"""
     manager = KintaiManager()
-    result = manager.create_new_record(date, check_in, check_out)
+
+    if sessions:
+        if date in manager.records:
+            click.echo("既に記録が存在します。編集するには edit コマンドを使用してください。", err=True)
+            click.get_current_context().exit(1)
+            return
+        try:
+            pairs = []
+            for raw in sessions:
+                pairs.extend(_parse_sessions_arg(raw))
+        except ValueError as e:
+            click.echo(str(e), err=True)
+            click.get_current_context().exit(1)
+            return
+        result = manager.set_day_sessions(
+            date, [{'check_in': ci, 'check_out': co} for ci, co in pairs]
+        )
+    elif check_in and check_out:
+        result = manager.create_new_record(date, check_in, check_out)
+    else:
+        click.echo("エラー: --in/--out または --session を指定してください。", err=True)
+        click.get_current_context().exit(1)
+        return
+
     if result.success:
         for line in result.message.split('\n'):
             click.echo(line)
@@ -199,10 +271,38 @@ def new(date, check_in, check_out):
         click.get_current_context().exit(1)
 
 
-@cli.group()
-def break_group():
+def _wait_forever() -> None:
+    """テストでモック可能な無限待機（`kintai break`のブロッキング用）。"""
+    import time
+    while True:
+        time.sleep(3600)
+
+
+@cli.group(invoke_without_command=True, name='break')
+@click.pass_context
+def break_group(ctx):
     """休憩時間管理"""
-    pass
+    if ctx.invoked_subcommand is not None:
+        return
+
+    manager = KintaiManager()
+    result = manager.break_start()
+    if not result.success:
+        click.echo(result.message, err=True)
+        ctx.exit(1)
+
+    click.echo(result.message)
+    click.echo("休憩中... (Ctrl+Cで終了)")
+    try:
+        _wait_forever()
+    except KeyboardInterrupt:
+        click.echo()
+        end_result = manager.break_end()
+        if end_result.success:
+            for line in end_result.message.split('\n'):
+                click.echo(line)
+        else:
+            click.echo(end_result.message, err=True)
 
 
 @break_group.command()
@@ -228,9 +328,6 @@ def end():
     else:
         click.echo(result.message, err=True)
         click.get_current_context().exit(1)
-
-
-cli.add_command(break_group, name='break')
 
 
 @cli.command()
@@ -295,6 +392,16 @@ def summary(month, copy, work_hours):
             click.get_current_context().exit(1)
     else:
         display_console_summary(summary_data, display_month)
+
+
+@cli.command()
+@click.option('--port', type=int, default=None, help='使用するポート（省略時は空きポートを自動選択）')
+@click.option('--no-browser', is_flag=True, help='ブラウザを自動で開かない')
+def web(port, no_browser):
+    """ブラウザで月次勤怠テーブルを表示・編集"""
+    from .web.app import run_web_server
+    manager = KintaiManager()
+    run_web_server(manager, port=port, open_browser=not no_browser)
 
 
 def main():
