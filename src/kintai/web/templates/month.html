@@ -16,6 +16,39 @@
     </nav>
   </header>
 
+  <section class="summary-panel">
+    <h2 class="summary-title">{{ year_month }} 月次サマリー</h2>
+    <dl class="summary-stats">
+      <div class="stat">
+        <dt>勤務日数</dt>
+        <dd>{{ summary.work_days }}日</dd>
+      </div>
+      <div class="stat">
+        <dt>総勤務時間</dt>
+        <dd>{{ summary.total_seconds|duration }}</dd>
+      </div>
+      <div class="stat">
+        <dt>総休憩時間</dt>
+        <dd>{{ summary.total_break_seconds|duration }}</dd>
+      </div>
+      <div class="stat stat-primary">
+        <dt>実勤務時間</dt>
+        <dd>{{ summary.total_actual_work_seconds|duration }}</dd>
+      </div>
+      <div class="stat">
+        <dt>平均勤務時間</dt>
+        <dd>{{ summary.avg_seconds|duration }}</dd>
+      </div>
+      <div class="stat">
+        <dt>平均実勤務時間</dt>
+        <dd>{{ summary.avg_actual_work_seconds|duration }}</dd>
+      </div>
+    </dl>
+    {% if has_open_day %}
+    <p class="summary-note">進行中のセッションがある日は集計に含まれません。</p>
+    {% endif %}
+  </section>
+
   <table id="kintai-table">
     <thead>
       <tr>

@@ -56,7 +56,9 @@ Each date key holds `record['sessions']: List[Dict]`, not a single `check_in`/`c
 
 ## Web UI (`kintai web`)
 
-`kintai web` starts a local Flask server (`src/kintai/web/app.py`) and opens a browser showing a monthly attendance table with inline editing (add/edit/remove sessions and breaks per day, including overnight sessions via a "翌日" toggle). It is a thin client: all routes call `KintaiManager` methods (`get_month_days`, `set_day_sessions`) and contain no independent business logic. Flask is a regular dependency (not optional) since this is a primary feature of the tool. `use_reloader=False` is required in `app.run()` — the reloader re-execs the process and breaks both Ctrl+C handling and the auto-opened browser tab.
+`kintai web` starts a local Flask server (`src/kintai/web/app.py`) and opens a browser showing a monthly attendance table with inline editing (add/edit/remove sessions and breaks per day, including overnight sessions via a "翌日" toggle). 画面上部には月次サマリー（勤務日数・総勤務時間・総休憩時間・実勤務時間・平均勤務時間・平均実勤務時間）を表示する。これは `get_monthly_summary` の結果をそのまま描画したもので、CLI の `kintai summary` と同じ数値になる — つまり進行中セッションのある日は集計から除外される（表には行が出ているのに合計に含まれないため、そういう日があるときだけ「進行中のセッションがある日は集計に含まれません」の注記を出す）。残業/不足は所定労働時間の前提が必要なので Web には出していない（CLI の `summary --work-hours` のみ）。
+
+It is a thin client: all routes call `KintaiManager` methods (`get_month_days`, `get_monthly_summary`, `set_day_sessions`) and contain no independent business logic. Flask is a regular dependency (not optional) since this is a primary feature of the tool. `use_reloader=False` is required in `app.run()` — the reloader re-execs the process and breaks both Ctrl+C handling and the auto-opened browser tab.
 
 ## Break lock (`kintai break`)
 

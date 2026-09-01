@@ -134,3 +134,52 @@ def test_save_day_edits_closed_session_while_one_is_open(tmp_path):
     sessions = manager.records['2025-01-08']['sessions']
     assert sessions[0]['check_in'].strftime('%H:%M') == '10:30'
     assert 'check_out' not in sessions[1]
+
+
+def test_index_shows_monthly_summary(tmp_path):
+    manager = KintaiManager(str(tmp_path))
+    manager.set_day_sessions(
+        '2025-01-08',
+        [{'check_in': '09:00', 'check_out': '18:00'}],
+        breaks=[{'start': '12:00', 'end': '13:00'}],
+    )
+    manager.set_day_sessions('2025-01-09', [{'check_in': '10:00', 'check_out': '15:00'}])
+
+    client = create_app(manager).test_client()
+    body = client.get('/?month=2025-01').data.decode('utf-8')
+
+    assert '月次サマリー' in body
+    assert '2日' in body  # 勤務日数
+    assert KintaiManager._format_duration_message(14 * 3600) in body  # 総勤務 9h + 5h
+    assert KintaiManager._format_duration_message(3600) in body  # 総休憩
+    assert KintaiManager._format_duration_message(13 * 3600) in body  # 実勤務
+    assert '集計に含まれません' not in body  # 進行中の日がなければ注記は出ない
+
+
+def test_index_notes_open_day_excluded_from_summary(tmp_path):
+    manager = KintaiManager(str(tmp_path))
+    manager.set_day_sessions('2025-01-08', [{'check_in': '09:00', 'check_out': '18:00'}])
+    manager.records['2025-01-09'] = {
+        'sessions': [{'check_in': datetime(2025, 1, 9, 9, 0, 0, tzinfo=JST)}],
+    }
+    manager.save_to_file()
+
+    client = create_app(manager).test_client()
+    body = client.get('/?month=2025-01').data.decode('utf-8')
+
+    assert '集計に含まれません' in body
+    assert '1日' in body  # 進行中の日は勤務日数に入らない
+    assert KintaiManager._format_duration_message(9 * 3600) in body
+
+
+def test_index_normalizes_unpadded_month(tmp_path):
+    """'2025-1' が 2025-10〜12 まで巻き込んで集計しないこと。"""
+    manager = KintaiManager(str(tmp_path))
+    manager.set_day_sessions('2025-01-08', [{'check_in': '09:00', 'check_out': '18:00'}])
+    manager.set_day_sessions('2025-10-08', [{'check_in': '09:00', 'check_out': '20:00'}])
+
+    client = create_app(manager).test_client()
+    body = client.get('/?month=2025-1').data.decode('utf-8')
+
+    assert KintaiManager._format_duration_message(9 * 3600) in body
+    assert KintaiManager._format_duration_message(20 * 3600) not in body  # 9h + 11h

@@ -2,6 +2,7 @@
 
 import socket
 import webbrowser
+from typing import Optional
 
 import click
 from flask import Flask, jsonify, render_template, request
@@ -37,6 +38,24 @@ def _serialize_day(manager: KintaiManager, date_str: str) -> dict:
     }
 
 
+def _normalize_month(year_month) -> Optional[str]:
+    """クエリの month を YYYY-MM に正規化する。不正な値は None（＝当月にフォールバック）。
+
+    get_monthly_summary は日付キーの前方一致で集計するため、'2025-1' のような
+    ゼロ埋めなしの月をそのまま渡すと 10〜12月まで巻き込んでしまう。
+    """
+    if not year_month:
+        return None
+    try:
+        year_str, month_str = year_month.split('-')
+        year, month = int(year_str), int(month_str)
+        if not (1 <= month <= 12):
+            raise ValueError()
+    except (ValueError, AttributeError):
+        return None
+    return f"{year:04d}-{month:02d}"
+
+
 def _shift_month(year_month: str, delta: int) -> str:
     year, month = int(year_month[:4]), int(year_month[5:7])
     month += delta
@@ -55,11 +74,15 @@ def create_app(manager: KintaiManager) -> Flask:
 
     @app.get('/')
     def index():
-        year_month = request.args.get('month') or manager._get_current_jst_time().strftime('%Y-%m')
+        current_month = manager._get_current_jst_time().strftime('%Y-%m')
+        year_month = _normalize_month(request.args.get('month')) or current_month
         days = manager.get_month_days(year_month)
+        summary = manager.get_monthly_summary(year_month)
         return render_template(
             'month.html',
             days=days,
+            summary=summary,
+            has_open_day=any(day['is_open'] for day in days),
             year_month=year_month,
             prev_month=_shift_month(year_month, -1),
             next_month=_shift_month(year_month, 1),
